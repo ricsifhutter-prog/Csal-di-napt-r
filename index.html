@@ -262,8 +262,15 @@ async function saveTodos(){
   try{ await window.storage.set(TODOS_KEY, JSON.stringify(todos), true); }catch(e){ console.error("Mentési hiba", e); }
 }
 
+function toLocalISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return y+"-"+m+"-"+day;
+}
+
 function eventsOnDate(dateObj){
-  const iso = dateObj.toISOString().slice(0,10);
+  const iso = toLocalISO(dateObj);
   const dow = dateObj.getDay();
   return events.filter(e=>{
     if(e.recurring){
@@ -321,7 +328,7 @@ function renderWeek(){
       evs.forEach(ev=>{
         html += '<div class="event-chip" style="background:'+personBg(ev.person)+'"><div class="info"><b style="color:'+personColor(ev.person)+'">'+esc(ev.title)+' · '+esc(ev.person)+'</b>';
         html += '<div class="meta" style="color:'+personColor(ev.person)+'">'+(ev.start||"")+(ev.end?('–'+ev.end):"")+(ev.location?(' · '+esc(ev.location)):'')+'</div></div>';
-        html += '<button class="del-btn" data-delev="'+ev.id+'" data-recdate="'+d.toISOString().slice(0,10)+'">törlés</button></div>';
+        html += '<button class="del-btn" data-delev="'+ev.id+'" data-recdate="'+toLocalISO(d)+'">törlés</button></div>';
       });
     }
     html += '</div>';
@@ -393,7 +400,7 @@ document.getElementById("wNext").onclick = ()=>{ refDate.setDate(refDate.getDate
 
 let selectedWeekdays = [];
 function openEventModal(){
-  document.getElementById("ev_date").value = new Date().toISOString().slice(0,10);
+  document.getElementById("ev_date").value = toLocalISO(new Date());
   document.getElementById("ev_start").value = "";
   document.getElementById("ev_end").value = "";
   document.getElementById("ev_title").value = "";
