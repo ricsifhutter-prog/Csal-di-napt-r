@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Családi naptár</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#F5F3ED;
+    --surface:#FFFFFF;
+    --surface-2:#EFEDE4;
+    --text:#2A2A26;
+    --text-2:#6B6A62;
+    --border:#E1DED2;
+    --lilla:#2F6F62;
+    --lilla-bg:#E3EEEA;
+    --ricsi:#B8791F;
+    --ricsi-bg:#F5E9D6;
+    --edit:#7A3E6B;
+    --edit-bg:#EFE1EC;
+    --dori:#B84C7D;
+    --dori-bg:#F7E3ED;
+    --danger:#C0392B;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3{font-family:'Fraunces',serif;font-weight:600;margin:0;}
+  .wrap{max-width:720px;margin:0 auto;padding:20px 16px 60px;}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:4px;}
+  header h1{font-size:24px;}
+  .legend{display:flex;gap:14px;margin-bottom:18px;font-size:13px;color:var(--text-2);}
+  .legend span{display:flex;align-items:center;gap:6px;}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block;}
+  .tabs{display:flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:18px;background:var(--surface);}
+  .tabs button{flex:1;border:none;background:transparent;padding:10px 0;font-size:14px;font-family:'Inter',sans-serif;color:var(--text-2);cursor:pointer;}
+  .tabs button.active{background:var(--surface-2);color:var(--text);font-weight:600;}
+  .nav-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .nav-row .period{font-size:16px;font-weight:600;font-family:'Fraunces',serif;min-width:170px;text-align:center;}
+  .icon-btn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border);background:var(--surface);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text);}
+  .icon-btn:active{transform:scale(0.96);}
+  .primary-btn{background:var(--text);color:#fff;border:none;border-radius:var(--radius);padding:10px 16px;font-size:14px;cursor:pointer;font-family:'Inter',sans-serif;font-weight:600;}
+  .month-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;}
+  .dow{text-align:center;font-size:11px;color:var(--text-2);padding-bottom:4px;}
+  .day-cell{min-height:58px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:4px;position:relative;}
+  .day-cell.today{border-color:var(--text);}
+  .day-num{font-size:12px;color:var(--text-2);}
+  .day-cell.today .day-num{color:var(--text);font-weight:600;}
+  .dots-row{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px;}
+  .week-day{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;}
+  .week-day-title{font-size:14px;font-weight:600;margin-bottom:8px;}
+  .week-day-title .d{color:var(--text-2);font-weight:400;}
+  .event-chip{display:flex;align-items:center;gap:10px;border-radius:8px;padding:8px 10px;margin-bottom:6px;}
+  .event-chip .info b{font-size:13px;}
+  .event-chip .info div.meta{font-size:12px;opacity:0.85;}
+  .empty{font-size:13px;color:var(--text-2);}
+  .del-btn{margin-left:auto;background:none;border:none;color:inherit;opacity:0.6;cursor:pointer;font-size:13px;}
+  .todo-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;display:flex;align-items:flex-start;gap:10px;}
+  .status-btn{border:none;background:none;font-size:18px;cursor:pointer;line-height:1;padding-top:2px;}
+  .todo-info{flex:1;}
+  .todo-info .task{font-size:14px;font-weight:500;}
+  .todo-info .task.done{text-decoration:line-through;color:var(--text-2);}
+  .todo-meta{font-size:12px;color:var(--text-2);margin-top:2px;}
+  .prio{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;}
+  .fab-row{display:flex;justify-content:flex-end;margin-bottom:12px;}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.35);display:none;align-items:flex-end;justify-content:center;z-index:10;}
+  .modal-bg.open{display:flex;}
+  .modal{background:var(--surface);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;max-height:88vh;overflow-y:auto;}
+  .field{margin-bottom:12px;}
+  .field label{display:block;font-size:12px;color:var(--text-2);margin-bottom:4px;}
+  .field input, .field select, .field textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;background:var(--bg);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .modal-actions{display:flex;gap:10px;margin-top:16px;}
+  .modal-actions button{flex:1;padding:11px;border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;font-weight:600;cursor:pointer;}
+  .btn-cancel{background:transparent;border:1px solid var(--border);color:var(--text);}
+  .btn-save{background:var(--text);border:none;color:#fff;}
+  .weekday-picker{display:flex;gap:6px;flex-wrap:wrap;}
+  .wd-toggle{padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-size:12px;cursor:pointer;background:var(--bg);}
+  .wd-toggle.sel{background:var(--text);color:#fff;border-color:var(--text);}
+  .error-text{color:var(--danger);font-size:12px;margin-top:4px;display:none;}
+  .hidden{display:none;}
+  .note{font-size:12px;color:var(--text-2);margin-bottom:16px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div id="lockScreen" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;">
+  <h1 style="margin-bottom:16px;">Családi naptár</h1>
+  <p style="font-size:14px;color:var(--text-2);margin-bottom:16px;">Add meg a családi PIN kódot a belépéshez</p>
+  <input type="tel" id="pinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" placeholder="••••" style="width:160px;text-align:center;font-size:24px;letter-spacing:8px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:12px;">
+  <div class="error-text" id="pinError" style="margin-bottom:12px;">Helytelen PIN kód.</div>
+  <button class="primary-btn" id="pinSubmit">Belépés</button>
+</div>
+
+<div class="wrap hidden" id="appWrap">
+    <h1>Családi naptár</h1>
+  </header>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--lilla)"></span>Lilla</span>
+    <span><span class="dot" style="background:var(--ricsi)"></span>Ricsi</span>
+    <span><span class="dot" style="background:var(--edit)"></span>Edit</span>
+    <span><span class="dot" style="background:var(--dori)"></span>Dóri</span>
+  </div>
+
+  <div class="tabs">
+    <button id="tabMonth" class="active">Hónap</button>
+    <button id="tabWeek">Hét</button>
+    <button id="tabTodos">Teendők</button>
+  </div>
+
+  <div id="viewMonth">
+    <div class="nav-row">
+      <button class="icon-btn" id="mPrev">&#8249;</button>
+      <div class="period" id="mLabel"></div>
+      <button class="icon-btn" id="mNext">&#8250;</button>
+    </div>
+    <div class="fab-row"><button class="primary-btn" id="addEventBtnMonth">+ Esemény</button><button class="primary-btn" id="importLillaBtn" style="background:var(--lilla);">Lilla óráinak importálása</button><button class="primary-btn" id="importRicsiBtn" style="background:var(--ricsi);">Ricsi teendőinek importálása</button></div>
+    <div class="dow-row month-grid">
+      <div class="dow">H</div><div class="dow">K</div><div class="dow">Sze</div><div class="dow">Cs</div><div class="dow">P</div><div class="dow">Szo</div><div class="dow">V</div>
+    </div>
+    <div class="month-grid" id="monthGrid" style="margin-top:4px;"></div>
+  </div>
+
+  <div id="viewWeek" class="hidden">
+    <div class="nav-row">
+      <button class="icon-btn" id="wPrev">&#8249;</button>
+      <div class="period" id="wLabel"></div>
+      <button class="icon-btn" id="wNext">&#8250;</button>
+    </div>
+    <div class="fab-row"><button class="primary-btn" id="addEventBtnWeek">+ Esemény</button></div>
+    <div id="weekList"></div>
+  </div>
+
+  <div id="viewTodos" class="hidden">
+    <div class="fab-row"><button class="primary-btn" id="addTodoBtn">+ Teendő</button></div>
+    <div id="todoList"></div>
+  </div>
+
+  <p class="note">Ez a naptár közösen megosztott adatokat használ: bárki, aki megnyitja ezt az oldalt, ugyanazokat az eseményeket és teendőket látja és szerkesztheti.</p>
+</div>
+
+<div class="modal-bg" id="eventModalBg">
+  <div class="modal">
+    <h3 style="margin-bottom:16px;">Új esemény</h3>
+    <div class="row2">
+      <div class="field"><label>Dátum</label><input type="date" id="ev_date"></div>
+      <div class="field"><label>Kategória</label>
+        <select id="ev_category">
+          <option value="Család">🏠 Család</option>
+          <option value="Munka">💼 Munka</option>
+          <option value="Iskola">🏫 Iskola / óvoda</option>
+          <option value="Sport">⚽ Sport</option>
+          <option value="Születésnap">🎂 Születésnap</option>
+          <option value="Rendezvény">🎉 Rendezvény</option>
+          <option value="Utazás">🚗 Utazás</option>
+          <option value="Időpont">🩺 Időpont</option>
+          <option value="Bevásárlás">🛒 Bevásárlás</option>
+          <option value="Teendő">🔧 Teendő</option>
+          <option value="Pénzügy">💰 Pénzügy</option>
+          <option value="Határidő">📌 Határidő</option>
+          <option value="Szabadság">🏖️ Szabadság</option>
+          <option value="Ünnep">🎄 Ünnep</option>
+        </select>
+      </div>
+    </div>
+    <div class="row2">
+      <div class="field"><label>Kezdés</label><input type="time" id="ev_start"></div>
+      <div class="field"><label>Befejezés</label><input type="time" id="ev_end"></div>
+    </div>
+    <div class="field"><label>Esemény neve</label><input type="text" id="ev_title" placeholder="pl. Fociedzés"></div>
+    <div class="field"><label>Résztvevő(k)</label>
+      <div class="weekday-picker" id="ev_person_group">
+        <div class="wd-toggle person-toggle" data-person="Lilla">Lilla</div>
+        <div class="wd-toggle person-toggle" data-person="Ricsi">Ricsi</div>
+        <div class="wd-toggle person-toggle" data-person="Edit">Edit</div>
+        <div class="wd-toggle person-toggle" data-person="Dóri">Dóri</div>
+        <div class="wd-toggle" id="ev_person_all">Mindenki</div>
+      </div>
+    </div>
+    <div class="field"><label>Helyszín</label><input type="text" id="ev_location" placeholder="pl. Sportcsarnok"></div>
+    <div class="field"><label>Megjegyzés</label><textarea id="ev_note" rows="2"></textarea></div>
+    <div class="field">
+      <label><input type="checkbox" id="ev_recurring" style="width:auto;vertical-align:middle;margin-right:6px;">Ismétlődő esemény (hetente)</label>
+      <div id="ev_wd_wrap" class="weekday-picker hidden" style="margin-top:8px;">
+        <div class="wd-toggle" data-d="1">H</div><div class="wd-toggle" data-d="2">K</div><div class="wd-toggle" data-d="3">Sze</div><div class="wd-toggle" data-d="4">Cs</div><div class="wd-toggle" data-d="5">P</div><div class="wd-toggle" data-d="6">Szo</div><div class="wd-toggle" data-d="0">V</div>
+      </div>
+    </div>
+    <div class="error-text" id="ev_error">Add meg a dátumot és az esemény nevét.</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="ev_cancel">Mégse</button>
+      <button class="btn-save" id="ev_save">Mentés</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="todoModalBg">
+  <div class="modal">
+    <h3 style="margin-bottom:16px;">Új teendő</h3>
+    <div class="field"><label>Feladat</label><input type="text" id="td_task" placeholder="pl. Bevásárlás a hétvégére"></div>
+    <div class="row2">
+      <div class="field"><label>Felelős</label>
+        <select id="td_person">
+          <option value="Lilla">Lilla</option>
+          <option value="Ricsi">Ricsi</option>
+          <option value="Edit">Edit</option>
+          <option value="Dóri">Dóri</option>
+          <option value="Mindenki">Mindenki</option>
+        </select>
+      </div>
+      <div class="field"><label>Határidő</label><input type="date" id="td_due"></div>
+    </div>
+    <div class="field"><label>Prioritás</label>
+      <select id="td_priority">
+        <option value="red">🔴 Nagyon fontos</option>
+        <option value="orange">🟠 Fontos</option>
+        <option value="yellow" selected>🟡 Normál</option>
+        <option value="green">🟢 Rugalmas</option>
+      </select>
+    </div>
+    <div class="error-text" id="td_error">Add meg a feladat nevét.</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" id="td_cancel">Mégse</button>
+      <button class="btn-save" id="td_save">Mentés</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const FAMILY_PIN = "4321";
+
+function unlockApp(){
+  document.getElementById("lockScreen").style.display = "none";
+  document.getElementById("appWrap").classList.remove("hidden");
+}
+
+function isUnlocked(){
+  try{ return localStorage.getItem("familyCalendarUnlocked") === "yes"; }
+  catch(e){ return false; }
+}
+function rememberUnlocked(){
+  try{ localStorage.setItem("familyCalendarUnlocked", "yes"); }catch(e){}
+}
+
+if(isUnlocked()){
+  unlockApp();
+}
+
+document.getElementById("pinSubmit").addEventListener("click", ()=>{
+  const val = document.getElementById("pinInput").value.trim();
+  if(val === FAMILY_PIN){
+    rememberUnlocked();
+    document.getElementById("pinError").style.display = "none";
+    unlockApp();
+  }else{
+    document.getElementById("pinError").style.display = "block";
+  }
+});
+document.getElementById("pinInput").addEventListener("keydown", (e)=>{
+  if(e.key === "Enter"){ document.getElementById("pinSubmit").click(); }
+});
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBbueOfUzbw2ib8KvvDAjBGU4_MImhQTyg",
+  authDomain: "csaladi-naptar-92c33.firebaseapp.com",
+  projectId: "csaladi-naptar-92c33",
+  storageBucket: "csaladi-naptar-92c33.firebasestorage.app",
+  messagingSenderId: "272937336203",
+  appId: "1:272937336203:web:06d2f8d2abdc547aba838e",
+  measurementId: "G-PSM9WZEDWR"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const eventsDocRef = db.collection("familyCalendar").doc("events");
+const todosDocRef = db.collection("familyCalendar").doc("todos");
+
+const dowFull = ["vasárnap","hétfő","kedd","szerda","csütörtök","péntek","szombat"];
+const monthNames = ["január","február","március","április","május","június","július","augusztus","szeptember","október","november","december"];
+const prioColors = {red:"#C0392B", orange:"#D9822B", yellow:"#D4B106", green:"#4C9A2A"};
+const prioLabels = {red:"Nagyon fontos", orange:"Fontos", yellow:"Normál", green:"Rugalmas"};
+
+let events = [];
+let todos = [];
+let refDate = new Date();
+let currentView = "month";
+
+function getPersons(ev){
+  if(ev.persons && ev.persons.length) return ev.persons;
+  if(ev.person) return [ev.person];
+  return [];
+}
+
+function personColor(p){
+  if(p === "Ricsi") return "var(--ricsi)";
+  if(p === "Edit") return "var(--edit)";
+  if(p === "Dóri") return "var(--dori)";
+  return "var(--lilla)";
+}
+function personBg(p){
+  if(p === "Ricsi") return "var(--ricsi-bg)";
+  if(p === "Edit") return "var(--edit-bg)";
+  if(p === "Dóri") return "var(--dori-bg)";
+  return "var(--lilla-bg)";
+}
+
+const seedEvents = [
+  {id:"seed1", date:"2025-09-01", start:"07:00", end:"15:00", title:"Tanítás", person:"Lilla",
+   location:"Szemere Bertalan Technikum, Szakképző Iskola", category:"Munka", note:"",
+   recurring:true, days:[3,4]}
+];
+
+function listenForChanges(){
+  eventsDocRef.onSnapshot((doc)=>{
+    if(doc.exists && doc.data().list){
+      events = doc.data().list;
+    }else{
+      events = seedEvents;
+      eventsDocRef.set({list: events}).catch(e=>console.error("Mentési hiba", e));
+    }
+    renderMonth(); renderWeek();
+  }, (err)=>{ console.error("Firestore olvasási hiba", err); });
+
+  todosDocRef.onSnapshot((doc)=>{
+    if(doc.exists && doc.data().list){
+      todos = doc.data().list;
+    }else{
+      todos = [];
+    }
+    renderTodos();
+  }, (err)=>{ console.error("Firestore olvasási hiba", err); });
+}
+
+async function saveEvents(){
+  try{ await eventsDocRef.set({list: events}); }catch(e){ console.error("Mentési hiba", e); }
+}
+async function saveTodos(){
+  try{ await todosDocRef.set({list: todos}); }catch(e){ console.error("Mentési hiba", e); }
+}
+
+const lillaBulkEvents = [
+  {date:"2026-09-11", start:"12:00", end:"18:00", loc:true},
+  {date:"2026-09-12", start:"11:00", end:"18:00", loc:true},
+  {date:"2026-09-18", start:"12:00", end:"18:00", loc:true},
+  {date:"2026-09-19", start:"08:00", end:"18:00", loc:false},
+  {date:"2026-10-02", start:"12:00", end:"18:00", loc:true},
+  {date:"2026-10-09", start:"14:00", end:"19:00", loc:true},
+  {date:"2026-10-10", start:"08:00", end:"19:00", loc:false},
+  {date:"2026-10-16", start:"12:00", end:"20:00", loc:false},
+  {date:"2026-10-30", start:"14:00", end:"20:00", loc:false},
+  {date:"2026-11-06", start:"12:00", end:"20:00", loc:true},
+  {date:"2026-11-07", start:"08:00", end:"14:00", loc:false},
+  {date:"2026-11-13", start:"14:00", end:"19:00", loc:true},
+  {date:"2026-11-14", start:"08:00", end:"18:00", loc:false},
+  {date:"2026-11-20", start:"14:00", end:"18:00", loc:true},
+  {date:"2026-11-21", start:"08:00", end:"19:00", loc:true},
+  {date:"2026-11-27", start:"12:00", end:"17:00", loc:true},
+  {date:"2026-12-04", start:"14:00", end:"16:00", loc:true},
+  {date:"2026-12-05", start:"08:00", end:"19:00", loc:true}
+];
+
+document.getElementById("importLillaBtn").addEventListener("click", async ()=>{
+  let addedCount = 0;
+  lillaBulkEvents.forEach(item=>{
+    const id = "lilla-"+item.date;
+    if(events.some(e=>e.id===id)) return;
+    events.push({
+      id: id,
+      date: item.date,
+      start: item.start,
+      end: item.end,
+      title: item.loc ? "Jelenléti matek óra" : "Online matek óra",
+      persons: ["Lilla"],
+      location: item.loc ? "M402 tanterem, Debreceni Egyetem" : "",
+      category: "Iskola",
+      note: "",
+      recurring: false,
+      days: []
+    });
+    addedCount++;
+  });
+  if(addedCount > 0){
+    await saveEvents();
+    renderMonth(); renderWeek();
+    alert(addedCount + " esemény sikeresen hozzáadva.");
+  }else{
+    alert("Ezek az események már mind szerepelnek a naptárban.");
+  }
+});
+
+function toLocalISO(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const day = String(d.getDate()).padStart(2,"0");
+  return y+"-"+m+"-"+day;
+}
+
+function eventsOnDate(dateObj){
+  const iso = toLocalISO(dateObj);
+  const dow = dateObj.getDay();
+  return events.filter(e=>{
+    if(e.recurring){
+      return dateObj >= new Date(e.date) && e.days.includes(dow);
+    }
+    return e.date === iso;
+  }).sort((a,b)=> (a.start||"").localeCompare(b.start||""));
+}
+
+function startOfWeek(d){
+  const day = (d.getDay()+6)%7;
+  const r = new Date(d); r.setHours(0,0,0,0); r.setDate(d.getDate()-day);
+  return r;
+}
+
+function renderMonth(){
+  const y = refDate.getFullYear(), m = refDate.getMonth();
+  document.getElementById("mLabel").textContent = monthNames[m] + " " + y;
+  const first = new Date(y,m,1);
+  const offset = (first.getDay()+6)%7;
+  const days = new Date(y,m+1,0).getDate();
+  const today = new Date();
+  let html = "";
+  for(let i=0;i<offset;i++) html += "<div></div>";
+  for(let d=1; d<=days; d++){
+    const cd = new Date(y,m,d);
+    const evs = eventsOnDate(cd);
+    const isToday = cd.toDateString()===today.toDateString();
+    html += '<div class="day-cell'+(isToday?' today':'')+'"><div class="day-num">'+d+'</div>';
+    if(evs.length){
+      html += '<div class="dots-row">';
+      evs.forEach(e=> getPersons(e).forEach(p=> html += '<span class="dot" style="background:'+personColor(p)+'"></span>'));
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+  document.getElementById("monthGrid").innerHTML = html;
+}
+
+function renderWeek(){
+  const s = startOfWeek(refDate);
+  const e = new Date(s); e.setDate(s.getDate()+6);
+  const sameMonth = s.getMonth()===e.getMonth();
+  document.getElementById("wLabel").textContent = sameMonth
+    ? (monthNames[s.getMonth()]+" "+s.getDate()+"-"+e.getDate()+".")
+    : (s.getDate()+" "+monthNames[s.getMonth()].slice(0,3)+" - "+e.getDate()+" "+monthNames[e.getMonth()].slice(0,3)+".");
+  let html = "";
+  for(let i=0;i<7;i++){
+    const d = new Date(s); d.setDate(s.getDate()+i);
+    const evs = eventsOnDate(d);
+    html += '<div class="week-day"><div class="week-day-title">'+dowFull[d.getDay()]+' <span class="d">'+d.getDate()+'.</span></div>';
+    if(evs.length===0){
+      html += '<div class="empty">Nincs esemény</div>';
+    }else{
+      evs.forEach(ev=>{
+        const persons = getPersons(ev);
+        const mainColor = personColor(persons[0]||"Lilla");
+        const mainBg = personBg(persons[0]||"Lilla");
+        html += '<div class="event-chip" style="background:'+mainBg+'"><div class="info"><b style="color:'+mainColor+'">'+esc(ev.title)+' · '+esc(persons.join(", "))+'</b>';
+        html += '<div class="meta" style="color:'+mainColor+'">'+(ev.start||"")+(ev.end?('–'+ev.end):"")+(ev.location?(' · '+esc(ev.location)):'')+'</div></div>';
+        html += '<button class="del-btn" data-delev="'+ev.id+'" data-recdate="'+toLocalISO(d)+'">törlés</button></div>';
+      });
+    }
+    html += '</div>';
+  }
+  document.getElementById("weekList").innerHTML = html;
+  document.querySelectorAll("[data-delev]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.getAttribute("data-delev");
+      events = events.filter(ev=>ev.id!==id);
+      await saveEvents();
+      renderWeek(); renderMonth();
+    });
+  });
+}
+
+function renderTodos(){
+  if(todos.length===0){
+    document.getElementById("todoList").innerHTML = '<div class="empty">Még nincs felvéve teendő.</div>';
+    return;
+  }
+  const sorted = [...todos].sort((a,b)=> (a.due||"9999").localeCompare(b.due||"9999"));
+  let html = "";
+  sorted.forEach(t=>{
+    const icon = t.status==="done" ? "✅" : (t.status==="progress" ? "🟡" : "⬜");
+    html += '<div class="todo-item"><button class="status-btn" data-cycle="'+t.id+'">'+icon+'</button>';
+    html += '<div class="todo-info"><div class="task'+(t.status==="done"?" done":"")+'">'+esc(t.task)+'</div>';
+    html += '<div class="todo-meta"><span class="prio" style="background:'+prioColors[t.priority]+'"></span>'+prioLabels[t.priority]+' · '+esc(t.person)+(t.due?(' · határidő: '+t.due):'')+'</div></div>';
+    html += '<button class="del-btn" data-deltodo="'+t.id+'">törlés</button></div>';
+  });
+  document.getElementById("todoList").innerHTML = html;
+  document.querySelectorAll("[data-cycle]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.getAttribute("data-cycle");
+      const t = todos.find(x=>x.id===id);
+      t.status = t.status==="none" || !t.status ? "progress" : (t.status==="progress" ? "done" : "none");
+      await saveTodos();
+      renderTodos();
+    });
+  });
+  document.querySelectorAll("[data-deltodo]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
+      const id = btn.getAttribute("data-deltodo");
+      todos = todos.filter(t=>t.id!==id);
+      await saveTodos();
+      renderTodos();
+    });
+  });
+}
+
+function esc(s){ return (s||"").replace(/[&<>]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+function switchView(v){
+  currentView = v;
+  document.getElementById("viewMonth").classList.toggle("hidden", v!=="month");
+  document.getElementById("viewWeek").classList.toggle("hidden", v!=="week");
+  document.getElementById("viewTodos").classList.toggle("hidden", v!=="todos");
+  document.getElementById("tabMonth").classList.toggle("active", v==="month");
+  document.getElementById("tabWeek").classList.toggle("active", v==="week");
+  document.getElementById("tabTodos").classList.toggle("active", v==="todos");
+}
+
+document.getElementById("tabMonth").onclick = ()=>switchView("month");
+document.getElementById("tabWeek").onclick = ()=>switchView("week");
+document.getElementById("tabTodos").onclick = ()=>switchView("todos");
+document.getElementById("mPrev").onclick = ()=>{ refDate.setMonth(refDate.getMonth()-1); renderMonth(); };
+document.getElementById("mNext").onclick = ()=>{ refDate.setMonth(refDate.getMonth()+1); renderMonth(); };
+document.getElementById("wPrev").onclick = ()=>{ refDate.setDate(refDate.getDate()-7); renderWeek(); };
+document.getElementById("wNext").onclick = ()=>{ refDate.setDate(refDate.getDate()+7); renderWeek(); };
+
+let selectedWeekdays = [];
+let selectedPersons = [];
+function openEventModal(){
+  document.getElementById("ev_date").value = toLocalISO(new Date());
+  document.getElementById("ev_start").value = "";
+  document.getElementById("ev_end").value = "";
+  document.getElementById("ev_title").value = "";
+  document.getElementById("ev_location").value = "";
+  document.getElementById("ev_note").value = "";
+  document.getElementById("ev_recurring").checked = false;
+  document.getElementById("ev_wd_wrap").classList.add("hidden");
+  document.getElementById("ev_error").style.display = "none";
+  selectedWeekdays = [];
+  selectedPersons = [];
+  document.querySelectorAll(".wd-toggle").forEach(b=>b.classList.remove("sel"));
+  document.getElementById("eventModalBg").classList.add("open");
+}
+document.getElementById("addEventBtnMonth").onclick = openEventModal;
+document.getElementById("addEventBtnWeek").onclick = openEventModal;
+document.getElementById("ev_cancel").onclick = ()=> document.getElementById("eventModalBg").classList.remove("open");
+document.getElementById("ev_recurring").onchange = (e)=>{
+  document.getElementById("ev_wd_wrap").classList.toggle("hidden", !e.target.checked);
+};
+document.querySelectorAll(".wd-toggle[data-d]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const d = parseInt(btn.getAttribute("data-d"));
+    btn.classList.toggle("sel");
+    if(selectedWeekdays.includes(d)) selectedWeekdays = selectedWeekdays.filter(x=>x!==d);
+    else selectedWeekdays.push(d);
+  });
+});
+document.querySelectorAll(".person-toggle").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const p = btn.getAttribute("data-person");
+    btn.classList.toggle("sel");
+    if(selectedPersons.includes(p)) selectedPersons = selectedPersons.filter(x=>x!==p);
+    else selectedPersons.push(p);
+  });
+});
+document.getElementById("ev_person_all").addEventListener("click", ()=>{
+  const allPersons = ["Lilla","Ricsi","Edit","Dóri"];
+  const allSelected = allPersons.every(p=>selectedPersons.includes(p));
+  document.querySelectorAll(".person-toggle").forEach(b=> b.classList.toggle("sel", !allSelected));
+  selectedPersons = allSelected ? [] : [...allPersons];
+});
+document.getElementById("ev_save").onclick = async ()=>{
+  const date = document.getElementById("ev_date").value;
+  const title = document.getElementById("ev_title").value.trim();
+  if(!date || !title || selectedPersons.length===0){
+    document.getElementById("ev_error").textContent = selectedPersons.length===0
+      ? "Válassz ki legalább egy résztvevőt."
+      : "Add meg a dátumot és az esemény nevét.";
+    document.getElementById("ev_error").style.display = "block";
+    return;
+  }
+  const recurring = document.getElementById("ev_recurring").checked;
+  const newEvent = {
+    id: "e"+Date.now(),
+    date: date,
+    start: document.getElementById("ev_start").value,
+    end: document.getElementById("ev_end").value,
+    title: title,
+    persons: [...selectedPersons],
+    location: document.getElementById("ev_location").value.trim(),
+    category: document.getElementById("ev_category").value,
+    note: document.getElementById("ev_note").value.trim(),
+    recurring: recurring,
+    days: recurring ? selectedWeekdays : []
+  };
+  events.push(newEvent);
+  await saveEvents();
+  document.getElementById("eventModalBg").classList.remove("open");
+  renderMonth(); renderWeek();
+};
+
+function openTodoModal(){
+  document.getElementById("td_task").value = "";
+  document.getElementById("td_due").value = "";
+  document.getElementById("td_priority").value = "yellow";
+  document.getElementById("td_error").style.display = "none";
+  document.getElementById("todoModalBg").classList.add("open");
+}
+document.getElementById("addTodoBtn").onclick = openTodoModal;
+document.getElementById("td_cancel").onclick = ()=> document.getElementById("todoModalBg").classList.remove("open");
+document.getElementById("td_save").onclick = async ()=>{
+  const task = document.getElementById("td_task").value.trim();
+  if(!task){
+    document.getElementById("td_error").style.display = "block";
+    return;
+  }
+  todos.push({
+    id: "t"+Date.now(),
+    task: task,
+    person: document.getElementById("td_person").value,
+    due: document.getElementById("td_due").value,
+    priority: document.getElementById("td_priority").value,
+    status: "none"
+  });
+  await saveTodos();
+  document.getElementById("todoModalBg").classList.remove("open");
+  renderTodos();
+};
+
+document.getElementById("importRicsiBtn").addEventListener("click", async ()=>{
+  let addedCount = 0;
+
+  const recurringItems = [
+    {id:"ricsi-huba-dropoff-recurring", title:"Huba óvodába vitele", start:"07:30", end:""},
+    {id:"ricsi-huba-pickup-recurring", title:"Huba óvodából hazahozatala", start:"16:00", end:""}
+  ];
+  recurringItems.forEach(item=>{
+    if(events.some(e=>e.id===item.id)) return;
+    events.push({
+      id: item.id,
+      date: "2025-09-01",
+      start: item.start,
+      end: item.end,
+      title: item.title,
+      persons: ["Ricsi"],
+      location: "",
+      category: "Teendő",
+      note: "",
+      recurring: true,
+      days: [3,4]
+    });
+    addedCount++;
+  });
+
+  const matekPickupDates = ["2026-09-11","2026-09-18","2026-10-02","2026-10-09","2026-11-06","2026-11-13","2026-11-20","2026-11-27","2026-12-04"];
+  matekPickupDates.forEach(dateStr=>{
+    const id = "ricsi-huba-pickup-"+dateStr;
+    if(events.some(e=>e.id===id)) return;
+    events.push({
+      id: id,
+      date: dateStr,
+      start: "16:00",
+      end: "",
+      title: "Huba óvodából hazahozatala",
+      persons: ["Ricsi"],
+      location: "",
+      category: "Teendő",
+      note: "",
+      recurring: false,
+      days: []
+    });
+    addedCount++;
+  });
+
+  if(addedCount > 0){
+    await saveEvents();
+    renderMonth(); renderWeek();
+    alert(addedCount + " esemény sikeresen hozzáadva.");
+  }else{
+    alert("Ezek az események már mind szerepelnek a naptárban.");
+  }
+});
+
+(function init(){
+  renderMonth();
+  renderWeek();
+  renderTodos();
+  listenForChanges();
+})();
+</script>
+</body>
+</html>
